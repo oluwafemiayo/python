@@ -1,0 +1,179 @@
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: myapp
+# spec:
+#   type: NodePort
+#   selector:
+#     app: helloapp
+#   ports:
+#   - port: 80
+#     targetPort: 9090
+
+# ---
+# apiVersion: v1
+# kind: ReplicationController
+# metadata:
+#   name: myapprc
+# spec:
+#   replicas: 4
+#   selector:
+#     app: helloapp
+#   template:
+#     metadata:
+#       name: myapp
+#       labels:
+#         app: helloapp
+#     spec:
+#       containers:
+#         - name: myapp
+#           image: machala/mavenapp:22
+#           ports:
+#             - containerPort: 9090
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: myapp
+        image: <Image>
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 90
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  mywebapp
+  namespace: default
+  labels:
+    app:  mydpapp
+spec:
+  selector:
+    matchLabels:
+      app: mydpapp
+  replicas: 2
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: mydpapp
+    spec:
+      containers:
+      - name:  mydpcontainer
+        image:  machala/mavenapp:22
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_status/healthz
+            port: 80
+          initialDelaySeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+          periodSeconds: 10
+        env:
+        - name: mongodb
+          valueFrom:
+            configMapKeyRef:
+              name: MYAPP
+              key: mongo
+        ports:
+        - containerPort:  80
+          name:  MYAPP
+        volumeMounts:
+        - name: localtime
+          mountPath: /etc/localtime
+      volumes:
+        - name: localtime
+          hostPath:
+            path: /usr/share/us-west-1
+      restartPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp2
+spec:
+  selector:
+    matchLabels:
+      app: mydpapp
+  replicas: 4
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: mydpapp
+    spec:
+      containers:
+      - name: mydpappcontainer
+        image: machala/sprint-boot-mongo:1
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8080 
+        env:
+        - name: MONGO_DB_USERNAME
+          value: devdb
+        - name: MONGO_DB_PASSWORD
+          value: devdb@123
+        - name: MONGO_DB_HOSTNAME
+          value: mongo
+  restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mydpsvc
+spec:
+  type: NodePort
+  selector:
+    app: mydpapp
+  ports:
+  - port: 80
+    targetPort: 8080
+    nodePort: 32000
+
+
